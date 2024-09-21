@@ -64,6 +64,9 @@ class HotkeysDialog:
         )
         cancel_button.pack(side=tk.RIGHT, padx=5)
 
+        # Центрирование окна
+        self.center_window()
+
     def get_action_display_name(self, action):
         """Преобразование внутреннего названия действия в более читаемое."""
         names = {
@@ -95,6 +98,36 @@ class HotkeysDialog:
 
         self.save_callback(new_hotkeys)
         self.top.destroy()
+
+    def center_window(self):
+        """Центрирует диалоговое окно относительно родительского окна."""
+        self.top.update_idletasks()  # Обновить информацию о размерах окна
+
+        parent = self.top.master
+        if parent is None:
+            parent = self.top
+
+        # Получение геометрии родительского окна
+        parent_x = parent.winfo_rootx()
+        parent_y = parent.winfo_rooty()
+        parent_width = parent.winfo_width()
+        parent_height = parent.winfo_height()
+
+        # Получение размеров диалогового окна
+        window_width = self.top.winfo_width()
+        window_height = self.top.winfo_height()
+
+        # Если размеры еще не определены, установить временные значения
+        if window_width == 1 and window_height == 1:
+            self.top.update()
+            window_width = self.top.winfo_width()
+            window_height = self.top.winfo_height()
+
+        # Вычисление координат для центрирования
+        x = parent_x + (parent_width // 2) - (window_width // 2)
+        y = parent_y + (parent_height // 2) - (window_height // 2)
+
+        self.top.geometry(f"+{x}+{y}")
 
 
 class OutputSettingsDialog:
@@ -135,11 +168,44 @@ class OutputSettingsDialog:
         )
         cancel_button.pack(side=tk.RIGHT, padx=5)
 
+        # Центрирование окна
+        self.center_window()
+
     def save(self):
         """Сохранение настроек вывода логов."""
         new_colored_output = self.colored_var.get()
         self.save_callback(new_colored_output)
         self.top.destroy()
+
+    def center_window(self):
+        """Центрирует диалоговое окно относительно родительского окна."""
+        self.top.update_idletasks()  # Обновить информацию о размерах окна
+
+        parent = self.top.master
+        if parent is None:
+            parent = self.top
+
+        # Получение геометрии родительского окна
+        parent_x = parent.winfo_rootx()
+        parent_y = parent.winfo_rooty()
+        parent_width = parent.winfo_width()
+        parent_height = parent.winfo_height()
+
+        # Получение размеров диалогового окна
+        window_width = self.top.winfo_width()
+        window_height = self.top.winfo_height()
+
+        # Если размеры еще не определены, установить временные значения
+        if window_width == 1 and window_height == 1:
+            self.top.update()
+            window_width = self.top.winfo_width()
+            window_height = self.top.winfo_height()
+
+        # Вычисление координат для центрирования
+        x = parent_x + (parent_width // 2) - (window_width // 2)
+        y = parent_y + (parent_height // 2) - (window_height // 2)
+
+        self.top.geometry(f"+{x}+{y}")
 
 
 class ScriptRunnerGUI:

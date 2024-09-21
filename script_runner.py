@@ -8,7 +8,8 @@ import ast
 import tkinter as tk
 from tkinterdnd2 import DND_FILES, TkinterDnD
 import json
-import shlex  # Добавлено для разбора аргументов
+import shlex  # Уже импортировано
+import re  # Для парсинга ANSI кодов
 
 
 class HotkeysDialog:
@@ -96,7 +97,75 @@ class HotkeysDialog:
         self.top.destroy()
 
 
+class OutputSettingsDialog:
+    def __init__(self, parent, colored_output, save_callback):
+        self.top = tk.Toplevel(parent)
+        self.top.title("Настройки Вывода Логов")
+        self.top.grab_set()  # Сделать окно модальным
+
+        self.save_callback = save_callback
+        self.colored_output = colored_output
+
+        # Заголовок
+        header = ttkb.Label(
+            self.top,
+            text="Настройки Вывода Логов",
+            font=("TkDefaultFont", 14, "bold"),
+        )
+        header.pack(pady=10)
+
+        # Чекбокс для цветного вывода
+        self.colored_var = tk.BooleanVar(value=self.colored_output)
+        colored_checkbox = ttkb.Checkbutton(
+            self.top,
+            text="Использовать цветной вывод логов",
+            variable=self.colored_var,
+        )
+        colored_checkbox.pack(pady=5, padx=10)
+
+        # Кнопки "Сохранить" и "Отмена"
+        buttons_frame = ttkb.Frame(self.top, padding="10")
+        buttons_frame.pack(fill=tk.X)
+
+        save_button = ttkb.Button(buttons_frame, text="Сохранить", command=self.save)
+        save_button.pack(side=tk.RIGHT, padx=5)
+
+        cancel_button = ttkb.Button(
+            buttons_frame, text="Отмена", command=self.top.destroy
+        )
+        cancel_button.pack(side=tk.RIGHT, padx=5)
+
+    def save(self):
+        """Сохранение настроек вывода логов."""
+        new_colored_output = self.colored_var.get()
+        self.save_callback(new_colored_output)
+        self.top.destroy()
+
+
 class ScriptRunnerGUI:
+    ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[(?:\d+;?)*m")
+
+    ANSI_COLOR_MAP = {
+        "30": "black",
+        "31": "red",
+        "32": "green",
+        "33": "yellow",
+        "34": "blue",
+        "35": "magenta",
+        "36": "cyan",
+        "37": "white",
+        "90": "#A9A9A9",  # dark grey
+        "91": "#FF6666",  # light red
+        "92": "#66FF66",  # light green
+        "93": "#FFFF66",  # light yellow
+        "94": "#6666FF",  # light blue
+        "95": "#FF66FF",  # light magenta
+        "96": "#66FFFF",  # light cyan
+        "97": "#FFFFFF",  # bright white
+    }
+
+    RESET_CODE = "\x1b[0m"
+
     def __init__(self, master):
         self.master = master
         self.master.title("Python Script Runner")
@@ -301,6 +370,10 @@ class ScriptRunnerGUI:
         # Привязка фиксированных горячих клавиш
         self.bind_fixed_hotkeys()
 
+        # Создание тегов для ANSI цветов, если цветной вывод включен
+        if self.config.get("colored_output", True):
+            self.create_ansi_tags()
+
         # Привязка события закрытия окна для сохранения размера и конфигурации
         self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
@@ -350,6 +423,9 @@ class ScriptRunnerGUI:
         self.menubar.add_cascade(label="Настройки", menu=settings_menu)
         settings_menu.add_command(
             label="Настроить Горячие Клавиши", command=self.open_hotkeys_dialog
+        )
+        settings_menu.add_command(
+            label="Настройки Вывода Логов", command=self.open_output_settings_dialog
         )
 
         # Меню "Помощь"
@@ -551,23 +627,62 @@ class ScriptRunnerGUI:
             )
             stdout, stderr = process.communicate()
 
-            # Обновление текстового поля в главном потоке
-            self.master.after(0, self.update_output, stdout, stderr)
-        except Exception as e:
-            self.master.after(
-                0, self.update_output, "", f"Ошибка при запуске скрипта: {e}"
-            )
+            # Объединение stdout и stderr
+            combined_output = stdout + stderr
 
-    def update_output(self, stdout, stderr):
+            # Обновление текстового поля в главном потоке
+            self.master.after(0, self.update_output, combined_output)
+        except Exception as e:
+            self.master.after(0, self.update_output, f"Ошибка при запуске скрипта: {e}")
+
+    def update_output(self, output):
         """Обновление вывода скрипта."""
         self.output_text.config(state="normal")
-        if stdout:
-            self.output_text.insert(tk.END, "Вывод:\n" + stdout + "\n")
-        if stderr:
-            self.output_text.insert(tk.END, "Ошибки:\n" + stderr + "\n")
+        if self.config.get("colored_output", True):
+            self.insert_colored_text(output)
+        else:
+            # Убираем ANSI escape последовательности
+            clean_output = self.ANSI_ESCAPE_PATTERN.sub("", output)
+            self.output_text.insert(tk.END, clean_output)
         self.output_text.config(state="disabled")
 
         self.status.config(text="Готово")
+
+    def insert_colored_text(self, text):
+        """Вставка текста с цветами на основе ANSI escape последовательностей."""
+        current_color = None
+        last_end = 0
+
+        for match in self.ANSI_ESCAPE_PATTERN.finditer(text):
+            start, end = match.span()
+            if start > last_end:
+                segment = text[last_end:start]
+                if current_color:
+                    self.output_text.insert(tk.END, segment, current_color)
+                else:
+                    self.output_text.insert(tk.END, segment)
+            ansi_codes = match.group()[2:-1].split(";")
+            for code in ansi_codes:
+                if code == "0":
+                    current_color = None
+                elif code in self.ANSI_COLOR_MAP:
+                    color = self.ANSI_COLOR_MAP[code]
+                    if color not in self.output_text.tag_names():
+                        try:
+                            self.output_text.tag_configure(color, foreground=color)
+                        except tk.TclError:
+                            # Если цвет некорректен, игнорируем тег
+                            continue
+                    current_color = color
+            last_end = end
+
+        # Вставка оставшегося текста
+        if last_end < len(text):
+            segment = text[last_end:]
+            if current_color:
+                self.output_text.insert(tk.END, segment, current_color)
+            else:
+                self.output_text.insert(tk.END, segment)
 
     def display_documentation(self, event):
         """Отображение документации выбранного скрипта."""
@@ -615,6 +730,7 @@ class ScriptRunnerGUI:
             "scripts": self.scripts,
             "window_size": window_size,
             "hotkeys": self.config.get("hotkeys", {}),
+            "colored_output": self.config.get("colored_output", True),
         }
         try:
             with open(self.config_file, "w", encoding="utf-8") as f:
@@ -635,6 +751,7 @@ class ScriptRunnerGUI:
             "run_script": "Control-e",
             "delete_script": "Control-d",
         }
+        default_colored_output = True
         if os.path.exists(self.config_file):
             try:
                 with open(self.config_file, "r", encoding="utf-8") as f:
@@ -643,6 +760,9 @@ class ScriptRunnerGUI:
                 self.scripts = self.config.get("scripts", [])
                 self.window_size = self.config.get("window_size", default_window_size)
                 self.hotkeys = self.config.get("hotkeys", default_hotkeys)
+                self.colored_output = self.config.get(
+                    "colored_output", default_colored_output
+                )
             except Exception as e:
                 messagebox.showerror(
                     "Ошибка загрузки конфигурации",
@@ -653,6 +773,7 @@ class ScriptRunnerGUI:
                 self.scripts = []
                 self.window_size = default_window_size
                 self.hotkeys = default_hotkeys
+                self.colored_output = default_colored_output
         else:
             # Если config.json отсутствует, создать его с настройками по умолчанию
             self.config = {
@@ -660,10 +781,12 @@ class ScriptRunnerGUI:
                 "scripts": [],
                 "window_size": default_window_size,
                 "hotkeys": default_hotkeys,
+                "colored_output": default_colored_output,
             }
             self.hotkeys = default_hotkeys
             self.scripts = []
             self.window_size = default_window_size
+            self.colored_output = default_colored_output
             # Установка темы перед сохранением конфигурации
             self.style = ttkb.Style(default_theme)
             self.save_config()  # Сохранить первоначальную конфигурацию
@@ -698,6 +821,14 @@ class ScriptRunnerGUI:
         """Открытие диалога настройки горячих клавиш."""
         HotkeysDialog(self.master, self.hotkeys, self.update_hotkeys)
 
+    def open_output_settings_dialog(self):
+        """Открытие диалога настройки вывода логов."""
+        OutputSettingsDialog(
+            self.master,
+            self.config.get("colored_output", True),
+            self.update_output_settings,
+        )
+
     def update_hotkeys(self, new_hotkeys):
         """Обновление горячих клавиш и сохранение конфигурации."""
         self.hotkeys = new_hotkeys
@@ -705,6 +836,29 @@ class ScriptRunnerGUI:
         self.bind_fixed_hotkeys()
         self.save_config()
         self.status.config(text="Горячие клавиши обновлены.")
+
+    def update_output_settings(self, new_colored_output):
+        """Обновление настроек вывода логов и сохранение конфигурации."""
+        self.config["colored_output"] = new_colored_output
+        if new_colored_output:
+            self.create_ansi_tags()
+        else:
+            # Удаление всех цветных тегов
+            for tag in self.ANSI_COLOR_MAP.values():
+                if tag in self.output_text.tag_names():
+                    self.output_text.tag_delete(tag)
+        self.save_config()
+        self.status.config(text="Настройки вывода логов обновлены.")
+
+    def create_ansi_tags(self):
+        """Создание тегов для ANSI цветов в текстовом поле вывода."""
+        for code, color in self.ANSI_COLOR_MAP.items():
+            if color not in self.output_text.tag_names():
+                try:
+                    self.output_text.tag_configure(color, foreground=color)
+                except tk.TclError:
+                    # Если цвет некорректен, игнорируем тег
+                    continue
 
 
 if __name__ == "__main__":

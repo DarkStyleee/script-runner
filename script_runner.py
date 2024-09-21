@@ -8,6 +8,7 @@ import ast
 import tkinter as tk
 from tkinterdnd2 import DND_FILES, TkinterDnD
 import json
+import shlex  # Добавлено для разбора аргументов
 
 
 class HotkeysDialog:
@@ -507,7 +508,7 @@ class ScriptRunnerGUI:
         # Запрос аргументов для скрипта
         args = simpledialog.askstring(
             "Аргументы",
-            "Введите аргументы для скрипта (через пробел):",
+            "Введите аргументы для скрипта (используйте кавычки для аргументов с пробелами):",
             parent=self.master,
         )
         if args is None:
@@ -515,7 +516,20 @@ class ScriptRunnerGUI:
             self.status.config(text="Запуск скрипта отменен.")
             return
 
-        command = ["python", script_path] + args.split()
+        # Используем shlex.split для корректного разбора аргументов с учетом кавычек
+        try:
+            # Определение режима разбиения в зависимости от ОС
+            posix = not os.name == "nt"
+            parsed_args = shlex.split(args, posix=posix)
+        except ValueError as ve:
+            messagebox.showerror(
+                "Ошибка разбора аргументов",
+                f"Не удалось разобрать аргументы: {ve}",
+            )
+            self.status.config(text="Ошибка разбора аргументов.")
+            return
+
+        command = ["python", script_path] + parsed_args
 
         self.output_text.config(state="normal")
         self.output_text.delete(1.0, tk.END)

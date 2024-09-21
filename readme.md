@@ -54,7 +54,7 @@
 
 Запустите основной скрипт для запуска приложения:
 
-`python script_runner.py`
+`python main.py`
 
 ---
 

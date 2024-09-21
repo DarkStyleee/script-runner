@@ -1,3 +1,5 @@
+# main.py
+
 import ttkbootstrap as ttkb
 from ttkbootstrap.constants import *
 from tkinter import filedialog, messagebox, simpledialog
@@ -7,228 +9,17 @@ import os
 import ast
 import tkinter as tk
 from tkinterdnd2 import DND_FILES, TkinterDnD
-import json
-import shlex  # Уже импортировано
-import re  # Для парсинга ANSI кодов
+import re
+import shlex
 
-
-class HotkeysDialog:
-    def __init__(self, parent, current_hotkeys, save_callback):
-        self.top = tk.Toplevel(parent)
-        self.top.title("Настройка Горячих Клавиш")
-        self.top.grab_set()  # Сделать окно модальным
-
-        self.save_callback = save_callback
-        self.hotkeys = current_hotkeys.copy()
-
-        # Заголовок
-        header = ttkb.Label(
-            self.top,
-            text="Настройка Горячих Клавиш",
-            font=("TkDefaultFont", 14, "bold"),
-        )
-        header.pack(pady=10)
-
-        # Фрейм для настроек
-        settings_frame = ttkb.Frame(self.top, padding="10")
-        settings_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Список действий и их текущих горячих клавиш
-        self.entries = {}
-        for action, key in self.hotkeys.items():
-            row = ttkb.Frame(settings_frame)
-            row.pack(fill=tk.X, pady=5)
-
-            label = ttkb.Label(
-                row,
-                text=f"{self.get_action_display_name(action)}:",
-                width=20,
-                anchor=tk.W,
-            )
-            label.pack(side=tk.LEFT)
-
-            entry = ttkb.Entry(row)
-            entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0))
-            entry.insert(0, key)
-            self.entries[action] = entry
-
-        # Кнопки "Сохранить" и "Отмена"
-        buttons_frame = ttkb.Frame(self.top, padding="10")
-        buttons_frame.pack(fill=tk.X)
-
-        save_button = ttkb.Button(buttons_frame, text="Сохранить", command=self.save)
-        save_button.pack(side=tk.RIGHT, padx=5)
-
-        cancel_button = ttkb.Button(
-            buttons_frame, text="Отмена", command=self.top.destroy
-        )
-        cancel_button.pack(side=tk.RIGHT, padx=5)
-
-        # Центрирование окна
-        self.center_window()
-
-    def get_action_display_name(self, action):
-        """Преобразование внутреннего названия действия в более читаемое."""
-        names = {
-            "quit": "Выход",
-            "add_script": "Добавить Скрипт",
-            "run_script": "Запустить Скрипт",
-            "delete_script": "Удалить Скрипт",
-        }
-        return names.get(action, action)
-
-    def save(self):
-        """Сохранение настроек горячих клавиш."""
-        new_hotkeys = {}
-        for action, entry in self.entries.items():
-            key = entry.get().strip()
-            if not key:
-                messagebox.showerror(
-                    "Ошибка",
-                    f"Горячая клавиша для действия '{self.get_action_display_name(action)}' не может быть пустой.",
-                )
-                return
-            new_hotkeys[action] = key
-
-        # Проверка на уникальность горячих клавиш
-        keys = list(new_hotkeys.values())
-        if len(keys) != len(set(keys)):
-            messagebox.showerror("Ошибка", "Горячие клавиши должны быть уникальными.")
-            return
-
-        self.save_callback(new_hotkeys)
-        self.top.destroy()
-
-    def center_window(self):
-        """Центрирует диалоговое окно относительно родительского окна."""
-        self.top.update_idletasks()  # Обновить информацию о размерах окна
-
-        parent = self.top.master
-        if parent is None:
-            parent = self.top
-
-        # Получение геометрии родительского окна
-        parent_x = parent.winfo_rootx()
-        parent_y = parent.winfo_rooty()
-        parent_width = parent.winfo_width()
-        parent_height = parent.winfo_height()
-
-        # Получение размеров диалогового окна
-        window_width = self.top.winfo_width()
-        window_height = self.top.winfo_height()
-
-        # Если размеры еще не определены, установить временные значения
-        if window_width == 1 and window_height == 1:
-            self.top.update()
-            window_width = self.top.winfo_width()
-            window_height = self.top.winfo_height()
-
-        # Вычисление координат для центрирования
-        x = parent_x + (parent_width // 2) - (window_width // 2)
-        y = parent_y + (parent_height // 2) - (window_height // 2)
-
-        self.top.geometry(f"+{x}+{y}")
-
-
-class OutputSettingsDialog:
-    def __init__(self, parent, colored_output, save_callback):
-        self.top = tk.Toplevel(parent)
-        self.top.title("Настройки Вывода Логов")
-        self.top.grab_set()  # Сделать окно модальным
-
-        self.save_callback = save_callback
-        self.colored_output = colored_output
-
-        # Заголовок
-        header = ttkb.Label(
-            self.top,
-            text="Настройки Вывода Логов",
-            font=("TkDefaultFont", 14, "bold"),
-        )
-        header.pack(pady=10)
-
-        # Чекбокс для цветного вывода
-        self.colored_var = tk.BooleanVar(value=self.colored_output)
-        colored_checkbox = ttkb.Checkbutton(
-            self.top,
-            text="Использовать цветной вывод логов",
-            variable=self.colored_var,
-        )
-        colored_checkbox.pack(pady=5, padx=10)
-
-        # Кнопки "Сохранить" и "Отмена"
-        buttons_frame = ttkb.Frame(self.top, padding="10")
-        buttons_frame.pack(fill=tk.X)
-
-        save_button = ttkb.Button(buttons_frame, text="Сохранить", command=self.save)
-        save_button.pack(side=tk.RIGHT, padx=5)
-
-        cancel_button = ttkb.Button(
-            buttons_frame, text="Отмена", command=self.top.destroy
-        )
-        cancel_button.pack(side=tk.RIGHT, padx=5)
-
-        # Центрирование окна
-        self.center_window()
-
-    def save(self):
-        """Сохранение настроек вывода логов."""
-        new_colored_output = self.colored_var.get()
-        self.save_callback(new_colored_output)
-        self.top.destroy()
-
-    def center_window(self):
-        """Центрирует диалоговое окно относительно родительского окна."""
-        self.top.update_idletasks()  # Обновить информацию о размерах окна
-
-        parent = self.top.master
-        if parent is None:
-            parent = self.top
-
-        # Получение геометрии родительского окна
-        parent_x = parent.winfo_rootx()
-        parent_y = parent.winfo_rooty()
-        parent_width = parent.winfo_width()
-        parent_height = parent.winfo_height()
-
-        # Получение размеров диалогового окна
-        window_width = self.top.winfo_width()
-        window_height = self.top.winfo_height()
-
-        # Если размеры еще не определены, установить временные значения
-        if window_width == 1 and window_height == 1:
-            self.top.update()
-            window_width = self.top.winfo_width()
-            window_height = self.top.winfo_height()
-
-        # Вычисление координат для центрирования
-        x = parent_x + (parent_width // 2) - (window_width // 2)
-        y = parent_y + (parent_height // 2) - (window_height // 2)
-
-        self.top.geometry(f"+{x}+{y}")
+from config import ConfigManager
+from dialogs import HotkeysDialog, OutputSettingsDialog
+from utils import center_window
+from constants import ANSI_COLOR_MAP, DEFAULT_HOTKEYS
 
 
 class ScriptRunnerGUI:
     ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[(?:\d+;?)*m")
-
-    ANSI_COLOR_MAP = {
-        "30": "black",
-        "31": "red",
-        "32": "green",
-        "33": "yellow",
-        "34": "blue",
-        "35": "magenta",
-        "36": "cyan",
-        "37": "white",
-        "90": "#A9A9A9",  # dark grey
-        "91": "#FF6666",  # light red
-        "92": "#66FF66",  # light green
-        "93": "#FFFF66",  # light yellow
-        "94": "#6666FF",  # light blue
-        "95": "#FF66FF",  # light magenta
-        "96": "#66FFFF",  # light cyan
-        "97": "#FFFFFF",  # bright white
-    }
 
     RESET_CODE = "\x1b[0m"
 
@@ -236,8 +27,9 @@ class ScriptRunnerGUI:
         self.master = master
         self.master.title("Python Script Runner")
 
-        # Путь к конфигурационному файлу
-        self.config_file = "config.json"
+        # Инициализация менеджера конфигурации
+        self.config_manager = ConfigManager()
+        self.config = self.config_manager.config
 
         # Загрузка конфигурации и установка темы
         self.load_config()
@@ -415,7 +207,7 @@ class ScriptRunnerGUI:
         documentation_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.documentation_text.config(yscrollcommand=documentation_scrollbar.set)
 
-        # Строка состояния (Status Bar) — Создаём перед вызовом populate_listbox
+        # Строка состояния (Status Bar)
         self.status = ttkb.Label(
             master,
             text="Готово",
@@ -445,6 +237,8 @@ class ScriptRunnerGUI:
 
     def setup_styles(self):
         """Настройка пользовательских стилей."""
+        self.style = ttkb.Style(self.config.get("theme", "darkly"))
+
         # Стиль для заголовка
         self.style.configure("Header.TLabel", font=("TkDefaultFont", 24, "bold"))
 
@@ -522,7 +316,7 @@ class ScriptRunnerGUI:
                     f"Скрипт '{script_path}' не найден или имеет неподдерживаемый формат.",
                 )
                 self.scripts.remove(script_path)
-        self.save_config()  # Обновление конфигурации, если были удалены невалидные скрипты
+        self.config_manager.update("scripts", self.scripts)  # Обновление конфигурации
 
         if valid_scripts:
             self.status.config(text=f"Загружено {len(valid_scripts)} скриптов.")
@@ -533,16 +327,14 @@ class ScriptRunnerGUI:
         """Привязка фиксированных горячих клавиш на основе конфигурации."""
         hotkeys = self.config.get("hotkeys", {})
         # Отключение предыдущих привязок, если они есть
-        self.master.unbind_all(f"<{hotkeys.get('quit', 'Control-q')}>")
-        self.master.unbind_all(f"<{hotkeys.get('add_script', 'Control-w')}>")
-        self.master.unbind_all(f"<{hotkeys.get('run_script', 'Control-e')}>")
-        self.master.unbind_all(f"<{hotkeys.get('delete_script', 'Control-d')}>")
+        for action in DEFAULT_HOTKEYS.keys():
+            self.master.unbind_all(f"<{hotkeys.get(action, DEFAULT_HOTKEYS[action])}>")
 
         # Привязка горячих клавиш из конфигурации
-        quit_key = hotkeys.get("quit", "Control-q")
-        add_key = hotkeys.get("add_script", "Control-w")
-        run_key = hotkeys.get("run_script", "Control-e")
-        delete_key = hotkeys.get("delete_script", "Control-d")
+        quit_key = hotkeys.get("quit", DEFAULT_HOTKEYS["quit"])
+        add_key = hotkeys.get("add_script", DEFAULT_HOTKEYS["add_script"])
+        run_key = hotkeys.get("run_script", DEFAULT_HOTKEYS["run_script"])
+        delete_key = hotkeys.get("delete_script", DEFAULT_HOTKEYS["delete_script"])
 
         self.master.bind_all(f"<{quit_key}>", lambda event: self.master.quit())
         self.master.bind_all(f"<{add_key}>", lambda event: self.add_script())
@@ -553,7 +345,7 @@ class ScriptRunnerGUI:
         """Изменение темы приложения и сохранение выбора в конфигурационном файле."""
         self.style.theme_use(theme)
         self.status.config(text=f"Тема изменена на: {theme.capitalize()}")
-        self.save_config()
+        self.config_manager.update("theme", theme)
 
     def show_about(self):
         """Показать информацию о программе."""
@@ -613,7 +405,7 @@ class ScriptRunnerGUI:
             self.status.config(
                 text="Все выбранные скрипты уже добавлены или имеют неподдерживаемый формат."
             )
-        self.save_config()
+        self.config_manager.update("scripts", self.scripts)
 
     def remove_script(self):
         """Удаление выбранного скрипта."""
@@ -633,7 +425,7 @@ class ScriptRunnerGUI:
             del self.scripts[index]
             self.status.config(text=f"Удален скрипт: {script_name}")
             self.clear_documentation()
-            self.save_config()
+            self.config_manager.update("scripts", self.scripts)
 
     def run_script(self):
         """Запуск выбранного скрипта."""
@@ -731,8 +523,8 @@ class ScriptRunnerGUI:
             for code in ansi_codes:
                 if code == "0":
                     current_color = None
-                elif code in self.ANSI_COLOR_MAP:
-                    color = self.ANSI_COLOR_MAP[code]
+                elif code in ANSI_COLOR_MAP:
+                    color = ANSI_COLOR_MAP[code]
                     if color not in self.output_text.tag_names():
                         try:
                             self.output_text.tag_configure(color, foreground=color)
@@ -798,78 +590,25 @@ class ScriptRunnerGUI:
             "hotkeys": self.config.get("hotkeys", {}),
             "colored_output": self.config.get("colored_output", True),
         }
-        try:
-            with open(self.config_file, "w", encoding="utf-8") as f:
-                json.dump(config, f, ensure_ascii=False, indent=4)
-        except Exception as e:
-            messagebox.showerror(
-                "Ошибка сохранения конфигурации",
-                f"Не удалось сохранить конфигурацию: {e}",
-            )
+        self.config_manager.config.update(config)
+        self.config_manager.save_config()
 
     def load_config(self):
         """Загрузка конфигурации из файла."""
-        default_theme = "darkly"
-        default_window_size = "1200x900"
-        default_hotkeys = {
-            "quit": "Control-q",
-            "add_script": "Control-w",
-            "run_script": "Control-e",
-            "delete_script": "Control-d",
-        }
-        default_colored_output = True
-        if os.path.exists(self.config_file):
-            try:
-                with open(self.config_file, "r", encoding="utf-8") as f:
-                    self.config = json.load(f)
-                theme = self.config.get("theme", default_theme)
-                self.scripts = self.config.get("scripts", [])
-                self.window_size = self.config.get("window_size", default_window_size)
-                self.hotkeys = self.config.get("hotkeys", default_hotkeys)
-                self.colored_output = self.config.get(
-                    "colored_output", default_colored_output
-                )
-            except Exception as e:
-                messagebox.showerror(
-                    "Ошибка загрузки конфигурации",
-                    f"Не удалось загрузить конфигурацию: {e}",
-                )
-                self.config = {}
-                theme = default_theme
-                self.scripts = []
-                self.window_size = default_window_size
-                self.hotkeys = default_hotkeys
-                self.colored_output = default_colored_output
-        else:
-            # Если config.json отсутствует, создать его с настройками по умолчанию
-            self.config = {
-                "theme": default_theme,
-                "scripts": [],
-                "window_size": default_window_size,
-                "hotkeys": default_hotkeys,
-                "colored_output": default_colored_output,
-            }
-            self.hotkeys = default_hotkeys
-            self.scripts = []
-            self.window_size = default_window_size
-            self.colored_output = default_colored_output
-            # Установка темы перед сохранением конфигурации
-            self.style = ttkb.Style(default_theme)
-            self.save_config()  # Сохранить первоначальную конфигурацию
-            return  # Завершить метод, чтобы избежать повторного создания self.style
-
         # Установка темы
+        theme = self.config.get("theme", "darkly")
         self.style = ttkb.Style(theme)
 
     def set_window_size(self):
         """Установка размера окна из конфигурации."""
-        self.master.geometry(self.window_size)
+        window_size = self.config.get("window_size", "1200x900")
+        self.master.geometry(window_size)
 
     def on_closing(self):
         """Обработка события закрытия окна."""
         # Сохранение текущего размера окна
-        self.window_size = self.master.geometry()
-        self.save_config()
+        window_size = self.master.geometry()
+        self.config_manager.update("window_size", window_size)
         self.master.destroy()
 
     def bind_mousewheel(self, widget):
@@ -885,7 +624,11 @@ class ScriptRunnerGUI:
 
     def open_hotkeys_dialog(self):
         """Открытие диалога настройки горячих клавиш."""
-        HotkeysDialog(self.master, self.hotkeys, self.update_hotkeys)
+        HotkeysDialog(
+            self.master,
+            self.config.get("hotkeys", DEFAULT_HOTKEYS),
+            self.update_hotkeys,
+        )
 
     def open_output_settings_dialog(self):
         """Открытие диалога настройки вывода логов."""
@@ -897,28 +640,25 @@ class ScriptRunnerGUI:
 
     def update_hotkeys(self, new_hotkeys):
         """Обновление горячих клавиш и сохранение конфигурации."""
-        self.hotkeys = new_hotkeys
-        self.config["hotkeys"] = self.hotkeys
+        self.config_manager.update("hotkeys", new_hotkeys)
         self.bind_fixed_hotkeys()
-        self.save_config()
         self.status.config(text="Горячие клавиши обновлены.")
 
     def update_output_settings(self, new_colored_output):
         """Обновление настроек вывода логов и сохранение конфигурации."""
-        self.config["colored_output"] = new_colored_output
+        self.config_manager.update("colored_output", new_colored_output)
         if new_colored_output:
             self.create_ansi_tags()
         else:
             # Удаление всех цветных тегов
-            for tag in self.ANSI_COLOR_MAP.values():
+            for tag in ANSI_COLOR_MAP.values():
                 if tag in self.output_text.tag_names():
                     self.output_text.tag_delete(tag)
-        self.save_config()
         self.status.config(text="Настройки вывода логов обновлены.")
 
     def create_ansi_tags(self):
         """Создание тегов для ANSI цветов в текстовом поле вывода."""
-        for code, color in self.ANSI_COLOR_MAP.items():
+        for code, color in ANSI_COLOR_MAP.items():
             if color not in self.output_text.tag_names():
                 try:
                     self.output_text.tag_configure(color, foreground=color)
@@ -927,9 +667,13 @@ class ScriptRunnerGUI:
                     continue
 
 
-if __name__ == "__main__":
+def main():
     # Используем TkinterDnD.Tk для поддержки Drag & Drop
     root = TkinterDnD.Tk()
-    # Настройка темы до создания приложения
+    # Создание и запуск приложения
     app = ScriptRunnerGUI(root)
     root.mainloop()
+
+
+if __name__ == "__main__":
+    main()

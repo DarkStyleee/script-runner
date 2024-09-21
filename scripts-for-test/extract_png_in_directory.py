@@ -26,76 +26,44 @@
     python script.py SOURCE_FOLDER "Vector Parts" --group
 
 Зависимости:
-    - termcolor: Для цветного вывода сообщений в консоль.
-      Установить можно с помощью pip:
-          pip install termcolor
+    - pathlib: Для удобной работы с путями.
+    - shlex: Для безопасного разбиения аргументов (если необходимо).
 """
 
 import shutil
 import argparse
-import logging
 from typing import Dict, Optional, List
-from termcolor import colored
 from pathlib import Path
 import re
 import json
-import sys
+
+# ANSI цветовые коды
+COLOR_RESET = "\033[0m"
+COLOR_DEBUG = "\033[36m"  # Cyan
+COLOR_INFO = "\033[32m"  # Green
+COLOR_WARNING = "\033[33m"  # Yellow
+COLOR_ERROR = "\033[31m"  # Red
+COLOR_CRITICAL = "\033[35m"  # Magenta
 
 
-# Настройка логирования с поддержкой цветов
-class ColoredFormatter(logging.Formatter):
-    """
-    Форматтер для логирования с поддержкой цветов.
-    """
-
-    # Определение цветов для разных уровней логирования
-    COLORS = {
-        logging.DEBUG: "cyan",
-        logging.INFO: "green",
-        logging.WARNING: "yellow",
-        logging.ERROR: "red",
-        logging.CRITICAL: "magenta",
-    }
-
-    def format(self, record: logging.LogRecord) -> str:
-        log_color = self.COLORS.get(record.levelno, "white")
-        message = super().format(record)
-        return colored(message, log_color)
+def debug(message: str) -> None:
+    print(f"{COLOR_DEBUG}DEBUG: {message}{COLOR_RESET}")
 
 
-def setup_logger() -> logging.Logger:
-    """
-    Настраивает и возвращает логгер с цветным выводом.
-
-    Returns:
-        logging.Logger: Настроенный логгер.
-    """
-    logger = logging.getLogger("FileOrganizer")
-    logger.setLevel(logging.DEBUG)  # Устанавливаем минимальный уровень логирования
-
-    # Создаем консольный обработчик
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-
-    # Создаем файловый обработчик
-    fh = logging.FileHandler("file_organizer.log", encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-
-    # Создаем и устанавливаем цветной форматтер
-    formatter = ColoredFormatter("%(levelname)s: %(message)s")
-    ch.setFormatter(formatter)
-    fh.setFormatter(formatter)
-
-    # Добавляем обработчики к логгеру
-    if not logger.handlers:
-        logger.addHandler(ch)
-        logger.addHandler(fh)
-
-    return logger
+def info(message: str) -> None:
+    print(f"{COLOR_INFO}INFO: {message}{COLOR_RESET}")
 
 
-# Инициализация логгера
-logger = setup_logger()
+def warning(message: str) -> None:
+    print(f"{COLOR_WARNING}WARNING: {message}{COLOR_RESET}")
+
+
+def error(message: str) -> None:
+    print(f"{COLOR_ERROR}ERROR: {message}{COLOR_RESET}")
+
+
+def critical(message: str) -> None:
+    print(f"{COLOR_CRITICAL}CRITICAL: {message}{COLOR_RESET}")
 
 
 def sanitize_name(name: str) -> str:
@@ -156,9 +124,7 @@ def initialize_group_info(group_destination_base: Path) -> Dict[str, int]:
                     if index > max_index:
                         max_index = index
             group_info[sanitized_part_name] = max_index
-            logger.debug(
-                f"Инициализирован индекс для '{sanitized_part_name}': {max_index}"
-            )
+            debug(f"Инициализирован индекс для '{sanitized_part_name}': {max_index}")
     return group_info
 
 
@@ -179,7 +145,7 @@ def load_processed_folders(record_file: Path) -> set:
             data = json.load(f)
             return set(data)
     except Exception as e:
-        logger.error(
+        error(
             f"Не удалось загрузить файл учёта обработанных папок '{record_file}': {e}"
         )
         return set()
@@ -196,9 +162,9 @@ def save_processed_folders(record_file: Path, processed_folders: set) -> None:
     try:
         with record_file.open("w", encoding="utf-8") as f:
             json.dump(list(processed_folders), f, ensure_ascii=False, indent=4)
-        logger.debug(f"Сохранены обработанные папки в '{record_file}'")
+        debug(f"Сохранены обработанные папки в '{record_file}'")
     except Exception as e:
-        logger.error(
+        error(
             f"Не удалось сохранить файл учёта обработанных папок '{record_file}': {e}"
         )
 
@@ -225,7 +191,7 @@ def move_png_files(
             if not target_file_path.exists():
                 try:
                     shutil.move(str(file), str(target_file_path))
-                    logger.info(
+                    info(
                         f"Файл '{file.name}' перемещен из '{target_folder_path}' в '{destination_folder}'"
                     )
                     # Если требуется группировка
@@ -233,7 +199,7 @@ def move_png_files(
                         part_name = extract_part_name(file)
                         sanitized_part_name = sanitize_name(part_name)
                         if not sanitized_part_name:
-                            logger.warning(
+                            warning(
                                 f"Не удалось санитизировать название части для файла '{file.name}'. Файл пропущен для группировки."
                             )
                             continue
@@ -242,9 +208,7 @@ def move_png_files(
                         )
                         if not group_folder.exists():
                             group_folder.mkdir(parents=True, exist_ok=True)
-                            logger.info(
-                                f"Создана папка для части тела: '{group_folder}'"
-                            )
+                            info(f"Создана папка для части тела: '{group_folder}'")
                         # Обновляем счетчик
                         count = group_info.get(sanitized_part_name, 0) + 1
                         group_info[sanitized_part_name] = count
@@ -253,19 +217,17 @@ def move_png_files(
                         group_file_path = group_folder / new_file_name
                         try:
                             shutil.copy(str(target_file_path), str(group_file_path))
-                            logger.info(
-                                f"Файл '{file.name}' скопирован в '{group_file_path}'"
-                            )
+                            info(f"Файл '{file.name}' скопирован в '{group_file_path}'")
                         except Exception as e:
-                            logger.error(
+                            error(
                                 f"Не удалось скопировать файл '{file.name}' в '{group_file_path}': {e}"
                             )
                 except Exception as e:
-                    logger.error(
+                    error(
                         f"Не удалось переместить файл '{file.name}' из '{target_folder_path}' в '{destination_folder}': {e}"
                     )
             else:
-                logger.warning(
+                warning(
                     f"Файл '{file.name}' уже существует в '{destination_folder}', перемещение отменено"
                 )
 
@@ -283,9 +245,9 @@ def delete_directories_at_specific_level(start_path: Path) -> None:
                 if sub_dir.is_dir():
                     try:
                         shutil.rmtree(sub_dir)
-                        logger.info(f"Папка '{sub_dir}' удалена")
+                        info(f"Папка '{sub_dir}' удалена")
                     except Exception as e:
-                        logger.error(f"Не удалось удалить папку '{sub_dir}': {e}")
+                        error(f"Не удалось удалить папку '{sub_dir}': {e}")
 
 
 def delete_files_in_folder(folder_path: Path) -> None:
@@ -299,9 +261,9 @@ def delete_files_in_folder(folder_path: Path) -> None:
         if file.is_file():
             try:
                 file.unlink()
-                logger.info(f"Файл '{file.name}' удален")
+                info(f"Файл '{file.name}' удален")
             except Exception as e:
-                logger.error(f"Не удалось удалить файл '{file.name}': {e}")
+                error(f"Не удалось удалить файл '{file.name}': {e}")
 
 
 def rename_folders_and_clean_files(
@@ -331,10 +293,10 @@ def rename_folders_and_clean_files(
 
     # Поиск всех целевых папок внутри start_path
     target_folders = list(start_path.rglob(target_folder_name))
-    logger.debug(f"Найдено {len(target_folders)} папок с именем '{target_folder_name}'")
+    debug(f"Найдено {len(target_folders)} папок с именем '{target_folder_name}'")
 
     if not target_folders:
-        logger.warning(
+        warning(
             f"Не найдено ни одной папки с именем '{target_folder_name}' внутри '{start_path}'."
         )
         return
@@ -350,7 +312,7 @@ def rename_folders_and_clean_files(
                 groups[immediate_subfolder_name] = []
             groups[immediate_subfolder_name].append(target_folder_path)
         except ValueError:
-            logger.error(
+            error(
                 f"Папка '{target_folder_path}' не находится внутри '{start_path}'. Пропуск."
             )
             continue
@@ -360,9 +322,9 @@ def rename_folders_and_clean_files(
     if not organized_pngs.exists():
         try:
             organized_pngs.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Создана папка для перемещения PNG файлов: '{organized_pngs}'")
+            info(f"Создана папка для перемещения PNG файлов: '{organized_pngs}'")
         except Exception as e:
-            logger.error(f"Не удалось создать папку '{organized_pngs}': {e}")
+            error(f"Не удалось создать папку '{organized_pngs}': {e}")
             return
 
     # Если group is True, создаём папку 'Group_PNGs'
@@ -371,9 +333,9 @@ def rename_folders_and_clean_files(
         if not group_pngs.exists():
             try:
                 group_pngs.mkdir(parents=True, exist_ok=True)
-                logger.info(f"Создана папка для группировки PNG файлов: '{group_pngs}'")
+                info(f"Создана папка для группировки PNG файлов: '{group_pngs}'")
             except Exception as e:
-                logger.error(f"Не удалось создать папку '{group_pngs}': {e}")
+                error(f"Не удалось создать папку '{group_pngs}': {e}")
                 group = False  # Отключаем группировку, если не удалось создать папку
         # Инициализация счетчиков для частей тела
         group_info: Dict[str, int] = initialize_group_info(group_pngs)
@@ -385,12 +347,12 @@ def rename_folders_and_clean_files(
     for immediate_subfolder_name, folders in groups.items():
         # Проверка, была ли уже обработана группа папок с этим именем
         if immediate_subfolder_name in processed_folders:
-            logger.info(
+            info(
                 f"Группа папок с названием '{immediate_subfolder_name}' уже была обработана. Пропуск."
             )
             continue
 
-        logger.debug(
+        debug(
             f"Обработка группы папок '{immediate_subfolder_name}' с {len(folders)} целевыми папками."
         )
 
@@ -402,11 +364,9 @@ def rename_folders_and_clean_files(
             # Создание новой папки с уникальным именем
             try:
                 new_folder_path.mkdir(parents=True, exist_ok=True)
-                logger.info(
-                    f"Создана папка '{new_folder_path}' для перемещения файлов."
-                )
+                info(f"Создана папка '{new_folder_path}' для перемещения файлов.")
             except Exception as e:
-                logger.error(f"Не удалось создать папку '{new_folder_path}': {e}")
+                error(f"Не удалось создать папку '{new_folder_path}': {e}")
                 continue
 
             # Перемещение .png файлов
@@ -417,9 +377,9 @@ def rename_folders_and_clean_files(
             if txt_folder_path.exists() and txt_folder_path.is_dir():
                 try:
                     shutil.rmtree(txt_folder_path)
-                    logger.info(f"Папка 'TXT' удалена из '{target_folder_path}'")
+                    info(f"Папка 'TXT' удалена из '{target_folder_path}'")
                 except Exception as e:
-                    logger.error(
+                    error(
                         f"Не удалось удалить папку 'TXT' из '{target_folder_path}': {e}"
                     )
 
@@ -431,7 +391,7 @@ def rename_folders_and_clean_files(
 
         # После успешной обработки всех целевых папок в группе, добавляем название немедленного подкаталога в учёт
         processed_folders.add(immediate_subfolder_name)
-        logger.debug(
+        debug(
             f"Группа папок '{immediate_subfolder_name}' добавлена в учёт обработанных папок."
         )
 
@@ -440,7 +400,7 @@ def rename_folders_and_clean_files(
 
     # Завершение группировки
     if group:
-        logger.info("Группировка PNG файлов завершена.")
+        info("Группировка PNG файлов завершена.")
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -483,26 +443,26 @@ def main() -> None:
             "'"
         )  # Удаление лишних кавычек
 
-        logger.debug(
+        debug(
             f"Parsed arguments: source_folder='{source_folder}', target_folder_name='{target_folder_name}', group={args.group}"
         )
 
         # Проверка существования исходной папки
         if not source_folder.is_dir():
-            logger.error(
+            error(
                 f"Исходная папка '{source_folder}' не существует или не является директорией."
             )
             return
 
-        logger.info(
+        info(
             f"Начало обработки. Исходная папка: '{source_folder}', Целевая папка: '{target_folder_name}'"
         )
         rename_folders_and_clean_files(
             source_folder, target_folder_name, group=args.group
         )
-        logger.info("Обработка завершена.")
+        info("Обработка завершена.")
     except Exception as e:
-        logger.critical(f"Необработанная ошибка: {e}", exc_info=True)
+        critical(f"Необработанная ошибка: {e}")
 
 
 if __name__ == "__main__":

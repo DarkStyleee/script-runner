@@ -1,10 +1,11 @@
 {
     "theme": "vapor",
     "scripts": [
-        "C:/Users/DarkStyleee/YandexDisk/ScriptRunner/scripts-for-test/list_directory.py",
-        "C:/Users/DarkStyleee/YandexDisk/ScriptRunner/scripts-for-test/extract_png_in_directory.py"
+        "C:/Users/DarkStyleee/YandexDisk/script-runner/scripts/create_directory.py",
+        "C:/Users/DarkStyleee/YandexDisk/script-runner/scripts/extract_png_in_directory.py",
+        "C:/Users/DarkStyleee/YandexDisk/script-runner/scripts/list_directory.py"
     ],
-    "window_size": "1312x900+745+317",
+    "window_size": "1312x900+768+315",
     "hotkeys": {
         "quit": "Control-q",
         "add_script": "Control-w",

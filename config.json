@@ -5,11 +5,12 @@
         "C:/Users/DarkStyleee/YandexDisk/script-runner/scripts/extract_png_in_directory.py",
         "C:/Users/DarkStyleee/YandexDisk/script-runner/scripts/list_directory.py"
     ],
-    "window_size": "1312x900+768+315",
+    "window_size": "1394x937+738+270",
     "hotkeys": {
         "quit": "Control-q",
         "add_script": "Control-w",
         "run_script": "Control-e",
         "delete_script": "Control-d"
-    }
+    },
+    "colored_output": true
 }

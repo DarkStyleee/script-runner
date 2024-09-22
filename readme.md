@@ -48,6 +48,8 @@
 
 `pip install ttkbootstrap tkinterdnd2`
 
+На Linux: `sudo apt-get install python3.11-tk`
+
 ## Использование
 
 ### Запуск Приложения
